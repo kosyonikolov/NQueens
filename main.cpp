@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <memory>
 
 #include "MinList.h"
 #include "printBoard.h"
@@ -49,27 +50,58 @@ void checkAllPermutations(const int n)
     std::cout << solCount << "\n";
 }
 
-void minListTest()
+static inline int d0Idx(const int x, const int y)
 {
-    std::vector<int> testVals = { 4, 4, 1, 2, 3, 1, 1, 3, -1, 3, 4, 4, 4, 4, 5 };
-    MinList<int, int> minList(testVals.size());
-    MinList<int, int> maxList(testVals.size());
+    return y - x;
+}
 
-    std::default_random_engine dre;
+static inline int d1Idx(const int x, const int y, const int n)
+{
+    return y + x - n;
+}
 
-    for (int i = 0; i < testVals.size(); i++)
+static inline int calcConflicts(const int x, const int y, const int n,
+                                const int * colHist, const int * d0Hist, const int * d1Hist)
+{
+    return colHist[x] + d0Hist[d0Idx(x, y)] + d1Hist[d1Idx(x, y, n)];
+}
+
+template<typename _URNG>
+void initBoard(int * outColIdx, const int n, 
+               int * colHist, int * d0Hist, int * d1Hist,
+               MinList<int, int> & conflictList,
+               _URNG & rng)
+{
+    // prepare histograms
+    const int diagonalHistSize = 2 * n - 1;
+    std::fill_n(colHist, n, 0);
+    std::fill_n(d0Hist - n, diagonalHistSize, 0);
+    std::fill_n(d1Hist - n, diagonalHistSize, 0);
+
+    for (int y = 0; y < n; y++)
     {
-        minList.Update(testVals[i], i);
-        maxList.Update(testVals[i], i, std::greater<int>());
+        // reset list
+        conflictList.Reset();
 
-        std::cout << minList.SelectRandom(dre) << "\t" << maxList.SelectRandom(dre) << "\n";
+        // Evaluate all positions
+        for (int x = 0; x < n; x++)
+        {
+            conflictList.Update(calcConflicts(x, y, n, colHist, d0Hist, d1Hist), x);
+        }
+
+        // select one of the best positions at random
+        const int x = conflictList.SelectRandom(rng);
+        outColIdx[y] = x;
+
+        // update histograms
+        colHist[x]++;
+        d0Hist[d0Idx(x, y)]++;
+        d1Hist[d1Idx(x, y, n)]++;
     }
 }
 
 int main(int argc, char ** argv) 
 {
-    minListTest();
-
     const std::string USAGE_MSG = "Usage: ./NQueens [N]";
     if (argc != 2)
     {
@@ -79,7 +111,37 @@ int main(int argc, char ** argv)
 
     const int n = std::stoi(argv[1]);
 
-    checkAllPermutations(n);
+    // =======================
+    // *** Allocate memory ***
+    // =======================
+
+    // board state
+    std::unique_ptr<int[]> ptrQueenColIdx(new int[n]);
+
+    // histograms to keep track of how many queens are where
+    std::unique_ptr<int[]> ptrColHistogram(new int[n]);
+    std::unique_ptr<int[]> ptrD0Histogram(new int[2 * n + 1]);
+    std::unique_ptr<int[]> ptrD1Histogram(new int[2 * n + 1]);
+
+    // extract raw pointers - avoid writing .get() everywhere
+    int * queenColIdx = ptrQueenColIdx.get();
+    int * colHist = ptrColHistogram.get();
+
+    // make diagonal pointers start at the center of the histogram
+    // this allows us to take advantage of negative indices
+    int * d0Hist = ptrD0Histogram.get() + n + 1;
+    int * d1Hist = ptrD1Histogram.get() + n + 1;
+
+    // list used to choose min/max indices at random
+    MinList<int, int> minMaxList(n);
+
+    std::random_device rng;
+
+    initBoard(queenColIdx, n, 
+              colHist, d0Hist, d1Hist,
+              minMaxList, rng);
+
+    printBoard(std::cout, queenColIdx, n);
 
     return 0;
 }
