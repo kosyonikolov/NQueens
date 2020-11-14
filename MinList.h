@@ -1,7 +1,7 @@
 #ifndef MIN_LIST_H
 #define MIN_LIST_H
 
-#include <memory>
+#include <vector>
 #include <functional>
 #include <random>
 #include <utility>
@@ -12,8 +12,8 @@ class MinList
 private:
     const size_t size;
     size_t insertIdx;
-    std::unique_ptr<_Key[]> minKeys;
-    std::unique_ptr<_Val[]> minValues;
+    std::vector<_Key> minKeys;
+    std::vector<_Val> minValues;
 
     template<class _URNG>
     int SelectRandomIndex(_URNG & rng)
@@ -25,8 +25,8 @@ private:
 public:
     MinList(const size_t n) : size(n)
     {
-        minKeys = std::unique_ptr<_Key[]>(new _Key[n]);
-        minValues = std::unique_ptr<_Val[]>(new _Val[n]);
+        minKeys = std::vector<_Key>(n);
+        minValues = std::vector<_Val>(n);
     }
 
     void Reset()

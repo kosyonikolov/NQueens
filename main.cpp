@@ -64,7 +64,33 @@ static inline int d1Idx(const int x, const int y, const int n)
 static inline int conflicts(const int x, const int y, const int n,
                                 const int * colHist, const int * d0Hist, const int * d1Hist)
 {
-    return colHist[x] + d0Hist[d0Idx(x, y)] + d1Hist[d1Idx(x, y, n)];
+    // split up for debug
+    int colContrib = colHist[x];
+    int _d0Idx = d0Idx(x, y);
+    int d0Contrib = d0Hist[_d0Idx];
+    int _d1Idx = d1Idx(x, y, n);
+    int d1Contrib = d1Hist[_d1Idx];
+
+    return colContrib + d0Contrib + d1Contrib;
+
+    //return colHist[x] + d0Hist[d0Idx(x, y)] + d1Hist[d1Idx(x, y, n)];
+}
+
+void fillHistograms(const int * colIdx, const int n,
+                    int * colHist, int * d0Hist, int * d1Hist)
+{
+    const int diagonalHistSize = 2 * n - 1;
+    std::fill_n(colHist, n, 0);
+    std::fill_n(d0Hist - n, diagonalHistSize, 0);
+    std::fill_n(d1Hist - n, diagonalHistSize, 0);
+
+    for (int y = 0; y < n; y++)
+    {
+        const int x = colIdx[y];
+        colHist[x]++;
+        d0Hist[d0Idx(x, y)]++;
+        d1Hist[d1Idx(x, y, n)]++;
+    }
 }
 
 template<typename _URNG>
@@ -107,15 +133,19 @@ bool minimizeConflicts(int * outColIdx, const int n,
                        MinList<int, int> & conflictList,
                        _URNG & rng)
 {
-    const int maxIters = 2 * n;
+    const int maxIters = 5 * n;
     for (int i = 0; i < maxIters; i++)
     {
+        //fillHistograms(outColIdx, n, colHist, d0Hist, d1Hist);
+
         conflictList.Reset();
 
         // find queen with max conflicts
         for (int y = 0; y < n; y++)
         {
-            conflictList.Update(conflicts(outColIdx[y], y, n, colHist, d0Hist, d1Hist), y, std::greater<int>());
+            const int x = outColIdx[y];
+            const int currentConflicts = conflicts(x, y, n, colHist, d0Hist, d1Hist);
+            conflictList.Update(currentConflicts, y, std::greater<int>());
         }
 
         std::pair<int, int> worstQueen = conflictList.SelectRandomPair(rng);
@@ -132,11 +162,28 @@ bool minimizeConflicts(int * outColIdx, const int n,
         // find new position with min conflicts
         conflictList.Reset();
         int x = 0;
-        for (; x < worstX; x++) conflictList.Update(conflicts(x, worstY, n, colHist, d0Hist, d1Hist), x);
-        // all other positions on the same row do not count the diagonal attacks - subtract them from the source X
-        conflictList.Update(conflicts(worstX, worstY, n, colHist, d0Hist, d1Hist) - 2, x);
+
+        // std::cout << "Worst Y/X: " << worstY << " " << worstX << "\n";
+        // std::cout << "Conflicts: ";
+
+        for (; x < worstX; x++)
+        {
+            const int candConf = conflicts(x, worstY, n, colHist, d0Hist, d1Hist);
+            // std::cout << candConf << " ";
+            conflictList.Update(candConf, x);
+        } 
+        // source position - we will count 3 attacks from ourselves (col and two diagonals)
+        const int srcConf = conflicts(worstX, worstY, n, colHist, d0Hist, d1Hist) - 3;
+        // std::cout << srcConf << " ";
+        conflictList.Update(srcConf, x);
         x++;
-        for (; x < worstX; x++) conflictList.Update(conflicts(x, worstY, n, colHist, d0Hist, d1Hist), x);
+        for (; x < n; x++)
+        {
+            const int candConf = conflicts(x, worstY, n, colHist, d0Hist, d1Hist);
+            // std::cout << candConf << " ";
+            conflictList.Update(candConf, x);
+        } 
+        // std::cout << "\n";
 
         // move queen and update histograms
         const int newX = conflictList.SelectRandomValue(rng);
@@ -150,13 +197,91 @@ bool minimizeConflicts(int * outColIdx, const int n,
 
         d1Hist[d1Idx(worstX, worstY, n)]--;
         d1Hist[d1Idx(newX,   worstY, n)]++;
+
+        // printBoard(std::cout, outColIdx, n);
+        // std::cout << "\n";
     }
 
     return false;
 }
 
+void hardcodedTest()
+{
+    const int n = 10;
+    // =======================
+    // *** Allocate memory ***
+    // =======================
+
+    // board state
+    int queenColIdx[10] = {8, 4, 9, 7, 0, 2, 6, 6, 1, 3};
+
+    // histograms to keep track of how many queens are where
+    std::unique_ptr<int[]> ptrColHistogram(new int[n]);
+    std::unique_ptr<int[]> ptrD0Histogram(new int[2 * n + 1]);
+    std::unique_ptr<int[]> ptrD1Histogram(new int[2 * n + 1]);
+
+    // extract raw pointers - avoid writing .get() everywhere
+    int * colHist = ptrColHistogram.get();
+
+    // make diagonal pointers start at the center of the histogram
+    // this allows us to take advantage of negative indices
+    int * d0Hist = ptrD0Histogram.get() + n + 1;
+    int * d1Hist = ptrD1Histogram.get() + n + 1;
+
+    // fill histograms
+    const int diagonalHistSize = 2 * n - 1;
+    std::fill_n(colHist, n, 0);
+    std::fill_n(d0Hist - n, diagonalHistSize, 0);
+    std::fill_n(d1Hist - n, diagonalHistSize, 0);
+
+    for (int y = 0; y < n; y++)
+    {
+        const int x = queenColIdx[y];
+        colHist[x]++;
+        d0Hist[d0Idx(x, y)]++;
+        d1Hist[d1Idx(x, y, n)]++;
+    }
+
+    // list used to choose min/max indices at random
+    MinList<int, int> minMaxList(n);
+
+    std::random_device rng;
+
+    auto start = std::chrono::steady_clock::now();
+
+    // initBoard(queenColIdx, n, 
+    //           colHist, d0Hist, d1Hist,
+    //           minMaxList, rng);
+
+    auto end = std::chrono::steady_clock::now();
+    uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Init board: " << elapsedUs << " us\n";
+
+    printBoard(std::cout, queenColIdx, n);
+    for (int i = 0; i < n; i++) std::cout << queenColIdx[i] << " ";
+    std::cout << "\n";
+
+    start = std::chrono::steady_clock::now();
+
+    bool ok = minimizeConflicts(queenColIdx, n, 
+                                colHist, d0Hist, d1Hist,
+                                minMaxList, rng);
+
+    end = std::chrono::steady_clock::now();
+    elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Minimize conflicts: " << elapsedUs << " us\n";
+
+    std::cout << "Result: " << ok << "\n";
+    std::cout << "Check: " << isSolution(queenColIdx, n) << "\n";
+
+    printBoard(std::cout, queenColIdx, n);
+}
+
 int main(int argc, char ** argv) 
 {
+    // hardcodedTest();
+    // return 0;
+
     const std::string USAGE_MSG = "Usage: ./NQueens [N]";
     if (argc != 2)
     {
@@ -202,6 +327,10 @@ int main(int argc, char ** argv)
     uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     std::cout << "Init board: " << elapsedUs << " us\n";
 
+    // printBoard(std::cout, queenColIdx, n);
+    // for (int i = 0; i < n; i++) std::cout << queenColIdx[i] << " ";
+    // std::cout << "\n";
+
     start = std::chrono::steady_clock::now();
 
     bool ok = minimizeConflicts(queenColIdx, n, 
@@ -215,7 +344,7 @@ int main(int argc, char ** argv)
     std::cout << "Result: " << ok << "\n";
     std::cout << "Check: " << isSolution(queenColIdx, n) << "\n";
 
-    printBoard(std::cout, queenColIdx, n);
+    // printBoard(std::cout, queenColIdx, n);
 
     return 0;
 }
