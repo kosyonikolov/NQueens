@@ -16,18 +16,11 @@ bool isSolution(const int * queenColIdx, const int n)
         {
             const int xPrev = queenColIdx[yPrev];
 
-            if (xPrev == x)
-            {
-                return false; // same row
-            } 
+            if (xPrev == x) return false; // same row
 
             const int dx = x - xPrev; 
             const int dy = y - yPrev; // always positive
-
-            if (std::abs(dx) == dy)
-            {
-                return false; // diagonal
-            } 
+            if (std::abs(dx) == dy) return false; // diagonal
         }
     }
 
@@ -39,25 +32,24 @@ void checkAllPermutations(const int n)
     std::vector<int> colIdx(n);
     for (int i = 0; i < n; i++) colIdx[i] = i;
 
+    int solCount = 0;
+
     do
     {
         if (isSolution(colIdx.data(), n))
         {
             printBoard(std::cout, colIdx);
             std::cout << "\n";
+            solCount++;
         }
     } 
     while (std::next_permutation(colIdx.begin(), colIdx.end()));
     
+    std::cout << solCount << "\n";
 }
 
 int main(int argc, char ** argv) 
 {
-    // int test[8] = {5, 3, 6, 0, 7, 1, 4, 2};
-    // printBoard(std::cout, test, 8);
-
-    // std::cout << "Solution = " << isSolution(test, 8) << "\n";
-
     const std::string USAGE_MSG = "Usage: ./NQueens [N]";
     if (argc != 2)
     {
