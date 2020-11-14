@@ -4,6 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
+#include "MinList.h"
 #include "printBoard.h"
 
 bool isSolution(const int * queenColIdx, const int n)
@@ -48,8 +49,27 @@ void checkAllPermutations(const int n)
     std::cout << solCount << "\n";
 }
 
+void minListTest()
+{
+    std::vector<int> testVals = { 4, 4, 1, 2, 3, 1, 1, 3, -1, 3, 4, 4, 4, 4, 5 };
+    MinList<int, int> minList(testVals.size());
+    MinList<int, int> maxList(testVals.size());
+
+    std::default_random_engine dre;
+
+    for (int i = 0; i < testVals.size(); i++)
+    {
+        minList.Update(testVals[i], i);
+        maxList.Update(testVals[i], i, std::greater<int>());
+
+        std::cout << minList.SelectRandom(dre) << "\t" << maxList.SelectRandom(dre) << "\n";
+    }
+}
+
 int main(int argc, char ** argv) 
 {
+    minListTest();
+
     const std::string USAGE_MSG = "Usage: ./NQueens [N]";
     if (argc != 2)
     {
