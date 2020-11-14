@@ -4,6 +4,7 @@
 #include <memory>
 #include <functional>
 #include <random>
+#include <utility>
 
 template<typename _Key, typename _Val>
 class MinList
@@ -13,6 +14,13 @@ private:
     size_t insertIdx;
     std::unique_ptr<_Key[]> minKeys;
     std::unique_ptr<_Val[]> minValues;
+
+    template<class _URNG>
+    int SelectRandomIndex(_URNG & rng)
+    {
+        std::uniform_int_distribution<int> idxDistribution(0, insertIdx - 1);
+        return idxDistribution(rng);
+    }
 
 public:
     MinList(const size_t n) : size(n)
@@ -56,12 +64,16 @@ public:
     }
 
     template<class _URNG>
-    _Val SelectRandom(_URNG & rng)
+    _Val SelectRandomValue(_URNG & rng)
     {
-        std::uniform_int_distribution<int> idxDistribution(0, insertIdx - 1);
-        auto idx = idxDistribution(rng);
+        return minValues[SelectRandomIndex(rng)];
+    }
 
-        return minValues[idx];
+    template<class _URNG>
+    std::pair<_Key, _Val> SelectRandomPair(_URNG & rng)
+    {
+        const auto idx = SelectRandomIndex(rng);
+        return std::pair<_Key, _Val>(minKeys[idx], minValues[idx]);
     }
 };
 
