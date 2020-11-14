@@ -4,6 +4,7 @@
 #include <cmath>
 #include <algorithm>
 #include <memory>
+#include <chrono>
 
 #include "MinList.h"
 #include "printBoard.h"
@@ -137,11 +138,17 @@ int main(int argc, char ** argv)
 
     std::random_device rng;
 
+    auto start = std::chrono::steady_clock::now();
+
     initBoard(queenColIdx, n, 
               colHist, d0Hist, d1Hist,
               minMaxList, rng);
 
-    printBoard(std::cout, queenColIdx, n);
+    auto end = std::chrono::steady_clock::now();
+    uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Init board: " << elapsedUs << " us\n";
+
+    //printBoard(std::cout, queenColIdx, n);
 
     return 0;
 }
