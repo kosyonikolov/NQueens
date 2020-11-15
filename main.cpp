@@ -9,9 +9,25 @@
 #include "MinList.h"
 #include "printBoard.h"
 
+// Read from standard input instead of command-line argument
+#define READ_FROM_STDIN (1)
+
+// Print stats that show how many times the initialization happened
+// and how many iterations min conflicts performed each time
+// Also print the runtime of each stage
 #define PRINT_STATS (1)
+
+// Initialize the board using horse patterns + log n random positions
+// instead of the classical random init with min conflicts
+// This results in O(N) iterations of minConflicts, however
+// the initialization itself is faster at O(NlogN), which
+// results in better total runtime than the O(N^2) init and the O(1) iterations
 #define USE_HORSE_INIT (1)
 
+// Check if the reported "solutionness" is correct with an alternative method
+#define SANITY_CHECK (0)
+
+// Reference method for checking solution. Used in sanity check only
 bool isSolution(const int * queenColIdx, const int n)
 {
     for (int y = 1; y < n; y++)
@@ -43,8 +59,9 @@ static inline int d1Idx(const int x, const int y, const int n)
     return y + x - n;
 }
 
+// Calculate conflicts at a given position given the queen histograms
 static inline int conflicts(const int x, const int y, const int n,
-                                const int * colHist, const int * d0Hist, const int * d1Hist)
+                            const int * colHist, const int * d0Hist, const int * d1Hist)
 {
     // split up for debug
     int colContrib = colHist[x];
@@ -66,6 +83,8 @@ void clearHistograms(int * colHist, int * d0Hist, int * d1Hist, const int n)
     std::fill_n(d1Hist - n, diagonalHistSize, 0);
 }
 
+// Initialize the board by choosing a min-conflicts position at every row
+// Runtime: O(N^2)
 template<typename _URNG>
 void initBoard(int * outColIdx, const int n, 
                int * colHist, int * d0Hist, int * d1Hist,
@@ -107,6 +126,9 @@ void initBoard(int * outColIdx, const int n,
 #endif
 }
 
+// Initialize the board using a combination of horse moves from previous two lines
+// and some random positions at some rows (controlled by randomAttemps and pRandom)
+// Runtime: O(N * pRandom * randomAttempts)
 template<typename _URNG>
 void horsesForCourses(int * outColIdx, const int n, 
                       int * colHist, int * d0Hist, int * d1Hist,
@@ -120,9 +142,10 @@ void horsesForCourses(int * outColIdx, const int n,
 
     clearHistograms(colHist, d0Hist, d1Hist, n);
 
-    std::uniform_int_distribution<int> xDist(0, n - 1);
-    std::uniform_real_distribution<float> pDist(0, 1);
+    std::uniform_int_distribution<int> xDist(0, n - 1); // used for choosing random positions
+    std::uniform_real_distribution<float> pDist(0, 1);  // used for deciding to choose random positions
 
+    // place queen at position and update histograms
     auto placeQueen = [&](const int x, const int y)
     {
         outColIdx[y] = x;
@@ -132,7 +155,7 @@ void horsesForCourses(int * outColIdx, const int n,
     };
 
     int y = 0;
-    // place first queen
+    // place first queen - no previous lines
     {
         const int x = xDist(rng);
         placeQueen(x, y);
@@ -149,6 +172,8 @@ void horsesForCourses(int * outColIdx, const int n,
             conflictList.Update(conflicts(x, y, n, colHist, d0Hist, d1Hist), x);
         }
 
+        // Always add random positions to the list
+        // It doesn't make much difference if we do it only occassionally or never
         const int xPrev = outColIdx[y - 1];
         if (xPrev >= 2) conflictList.Update(conflicts(xPrev - 2, y, n, colHist, d0Hist, d1Hist), xPrev - 2);
         else conflictList.Update(conflicts(n + xPrev - 2, y, n, colHist, d0Hist, d1Hist), n + xPrev - 2);
@@ -160,6 +185,7 @@ void horsesForCourses(int * outColIdx, const int n,
         y++;
     }
 
+    // internal lines - 2 previous lines with queens available
     for (; y < n; y++)
     {
         conflictList.Reset();
@@ -203,6 +229,8 @@ void horsesForCourses(int * outColIdx, const int n,
 #endif
 }
 
+// Hillclimbing algorithm: at each iteration it finds the worst queen (most conflicts)
+// then moves it to a place with min conflicts on its row
 template<typename _URNG>
 bool minimizeConflicts(int * outColIdx, const int n, 
                        int * colHist, int * d0Hist, int * d1Hist,
@@ -256,7 +284,6 @@ bool minimizeConflicts(int * outColIdx, const int n,
             const int candConf = conflicts(x, worstY, n, colHist, d0Hist, d1Hist);
             conflictList.Update(candConf, x);
         } 
-        // std::cout << "\n";
 
         // move queen and update histograms
         const int newX = conflictList.SelectRandomValue(rng);
@@ -295,14 +322,17 @@ bool solve(int * outColIdx, const int n,
     int * colHist = ptrColHistogram.get();
 
     // make diagonal pointers start at the center of the histogram
-    // this allows ms to take advantage of negative indices
+    // this allows us to take advantage of negative indices
     int * d0Hist = ptrD0Histogram.get() + n;
     int * d1Hist = ptrD1Histogram.get() + n;
 
-    // list msed to choose min/max indices at random
+    // list used to choose min/max indices at random
+    // add 4 extra elements to avoid segfault when using horse strategy at low N
     MinList<int, int> minMaxList(n + 4);
 
     std::random_device rng;
+    std::default_random_engine dre(rng());
+    
     const int maxMinConflictIters = std::round(n * maxIterationsRatio);
 
 #if USE_HORSE_INIT
@@ -322,8 +352,8 @@ bool solve(int * outColIdx, const int n,
         if (n >= THR_HIGH) return VAL_HIGH;
 
         // calculate interpolation ratio for this n
-        // use sqrt because runtime increases with N^2
-        const float alpha = (std::sqrt(n) - std::sqrt(THR_LOW)) / (std::sqrt(THR_HIGH) - std::sqrt(THR_LOW));
+        // use pow because runtime increases with N^2
+        const float alpha = (std::pow(n, 2) - std::pow(THR_LOW, 2)) / (std::pow(THR_HIGH, 2) - std::pow(THR_LOW, 2));
         return alpha * VAL_LOW + (1.0f - alpha) * VAL_HIGH;
     }();
     const int randomAttempts = std::min(n, std::max(10, static_cast<int>(std::round(attemptMult * std::log2(n)))));
@@ -331,11 +361,11 @@ bool solve(int * outColIdx, const int n,
     horsesForCourses(outColIdx, n,
                      colHist, d0Hist, d1Hist,
                      pRandom, randomAttempts,
-                     minMaxList, rng);
+                     minMaxList, dre);
 #else   
     initBoard(outColIdx, n, 
               colHist, d0Hist, d1Hist,
-              minMaxList, rng);
+              minMaxList, dre);
 #endif
 
     int iStart = 1;
@@ -345,7 +375,7 @@ bool solve(int * outColIdx, const int n,
         ok = minimizeConflicts(outColIdx, n, 
                                colHist, d0Hist, d1Hist,
                                minMaxList, 
-                               maxMinConflictIters, rng);
+                               maxMinConflictIters, dre);
 
         if (ok) break;
 
@@ -353,11 +383,11 @@ bool solve(int * outColIdx, const int n,
         horsesForCourses(outColIdx, n,
                         colHist, d0Hist, d1Hist,
                         pRandom, randomAttempts,
-                        minMaxList, rng);
+                        minMaxList, dre);
 #else   
         initBoard(outColIdx, n, 
                 colHist, d0Hist, d1Hist,
-                minMaxList, rng);
+                minMaxList, dre);
 #endif
     }
 
@@ -370,6 +400,15 @@ bool solve(int * outColIdx, const int n,
 
 int main(int argc, char ** argv) 
 {
+#if READ_FROM_STDIN
+    int k;
+    if (!(std::cin >> k))
+    {
+        std::cerr << "Not a number\n";
+        return 1;
+    }
+    const int n = k;
+#else
     const std::string USAGE_MSG = "Usage: ./NQueens [N]";
     if (argc != 2)
     {
@@ -378,6 +417,8 @@ int main(int argc, char ** argv)
     }
 
     const int n = std::stoi(argv[1]);
+#endif
+
     // board state
     std::unique_ptr<int[]> ptrQueenColIdx(new int[n]);
     int * queenColIdx = ptrQueenColIdx.get();
@@ -396,19 +437,32 @@ int main(int argc, char ** argv)
 
     auto start = std::chrono::steady_clock::now();
 
-    bool ok = solve(queenColIdx, n, 100, 2.0f);
+    const bool ok = solve(queenColIdx, n, 100, 2.0f);
 
     auto end = std::chrono::steady_clock::now();
     uint64_t solTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "Solution time: " << solTimeMs << " ms\n";
+
+    if (!ok)
+    {
+        std::cout << "Out of luck: Failed to find solution. Please restart\n";
+        return 0;
+    }
 
     if (ok && n <= 42)
     {
         printBoard(std::cout, queenColIdx, n);
     }
 
-    std::cout << "Result: " << ok << "\n";
-    std::cout << "Check: " << isSolution(queenColIdx, n) << "\n";
+#if SANITY_CHECK
+    // Check if this is really a (not) solution
+    const bool check = isSolution(queenColIdx, n);
+    if (check != ok)
+    {
+        std::cerr << "Sanity check FAILED: solve() is wrong about the solution being a solution\nThis shouldn't happen\n";
+        return 1;
+    }
+#endif
 
     return 0;
 }
