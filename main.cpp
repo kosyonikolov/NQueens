@@ -307,7 +307,25 @@ bool solve(int * outColIdx, const int n,
 
 #if USE_HORSE_INIT
     const float pRandom = 1.0f;
-    const float attemptMult = 2.0f;
+    //const float attemptMult = 0.7f;
+    const float attemptMult = [&]()
+    {
+        // Experimentation has shown that for n=10k 0.7 works best
+        // and for n=100k 3.0 works best. The solution is to interpolate
+        // between those two values
+        const int THR_LOW = 10000;
+        const int THR_HIGH = 100000;
+        const float VAL_LOW = 0.7f;
+        const float VAL_HIGH = 3.0f;
+
+        if (n <= THR_LOW) return VAL_LOW;
+        if (n >= THR_HIGH) return VAL_HIGH;
+
+        // calculate interpolation ratio for this n
+        // use sqrt because runtime increases with N^2
+        const float alpha = (std::sqrt(n) - std::sqrt(THR_LOW)) / (std::sqrt(THR_HIGH) - std::sqrt(THR_LOW));
+        return alpha * VAL_LOW + (1.0f - alpha) * VAL_HIGH;
+    }();
     const int randomAttempts = std::max(10, static_cast<int>(std::round(attemptMult * std::log2(n))));
 
     horsesForCourses(outColIdx, n,
