@@ -30,27 +30,6 @@ bool isSolution(const int * queenColIdx, const int n)
     return true;
 }
 
-void checkAllPermutations(const int n)
-{
-    std::vector<int> colIdx(n);
-    for (int i = 0; i < n; i++) colIdx[i] = i;
-
-    int solCount = 0;
-
-    do
-    {
-        if (isSolution(colIdx.data(), n))
-        {
-            printBoard(std::cout, colIdx);
-            std::cout << "\n";
-            solCount++;
-        }
-    } 
-    while (std::next_permutation(colIdx.begin(), colIdx.end()));
-    
-    std::cout << solCount << "\n";
-}
-
 static inline int d0Idx(const int x, const int y)
 {
     return y - x;
@@ -205,83 +184,8 @@ bool minimizeConflicts(int * outColIdx, const int n,
     return false;
 }
 
-void hardcodedTest()
-{
-    const int n = 10;
-    // =======================
-    // *** Allocate memory ***
-    // =======================
-
-    // board state
-    int queenColIdx[10] = {8, 4, 9, 7, 0, 2, 6, 6, 1, 3};
-
-    // histograms to keep track of how many queens are where
-    std::unique_ptr<int[]> ptrColHistogram(new int[n]);
-    std::unique_ptr<int[]> ptrD0Histogram(new int[2 * n + 1]);
-    std::unique_ptr<int[]> ptrD1Histogram(new int[2 * n + 1]);
-
-    // extract raw pointers - avoid writing .get() everywhere
-    int * colHist = ptrColHistogram.get();
-
-    // make diagonal pointers start at the center of the histogram
-    // this allows us to take advantage of negative indices
-    int * d0Hist = ptrD0Histogram.get() + n + 1;
-    int * d1Hist = ptrD1Histogram.get() + n + 1;
-
-    // fill histograms
-    const int diagonalHistSize = 2 * n + 1;
-    std::fill_n(colHist, n, 0);
-    std::fill_n(d0Hist - n, diagonalHistSize, 0);
-    std::fill_n(d1Hist - n, diagonalHistSize, 0);
-
-    for (int y = 0; y < n; y++)
-    {
-        const int x = queenColIdx[y];
-        colHist[x]++;
-        d0Hist[d0Idx(x, y)]++;
-        d1Hist[d1Idx(x, y, n)]++;
-    }
-
-    // list used to choose min/max indices at random
-    MinList<int, int> minMaxList(n);
-
-    std::random_device rng;
-
-    auto start = std::chrono::steady_clock::now();
-
-    // initBoard(queenColIdx, n, 
-    //           colHist, d0Hist, d1Hist,
-    //           minMaxList, rng);
-
-    auto end = std::chrono::steady_clock::now();
-    uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Init board: " << elapsedUs << " us\n";
-
-    printBoard(std::cout, queenColIdx, n);
-    for (int i = 0; i < n; i++) std::cout << queenColIdx[i] << " ";
-    std::cout << "\n";
-
-    start = std::chrono::steady_clock::now();
-
-    bool ok = minimizeConflicts(queenColIdx, n, 
-                                colHist, d0Hist, d1Hist,
-                                minMaxList, rng);
-
-    end = std::chrono::steady_clock::now();
-    elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "Minimize conflicts: " << elapsedUs << " us\n";
-
-    std::cout << "Result: " << ok << "\n";
-    std::cout << "Check: " << isSolution(queenColIdx, n) << "\n";
-
-    printBoard(std::cout, queenColIdx, n);
-}
-
 int main(int argc, char ** argv) 
 {
-    // hardcodedTest();
-    // return 0;
-
     const std::string USAGE_MSG = "Usage: ./NQueens [N]";
     if (argc != 2)
     {
@@ -327,10 +231,6 @@ int main(int argc, char ** argv)
     uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
     std::cout << "Init board: " << elapsedUs << " us\n";
 
-    // printBoard(std::cout, queenColIdx, n);
-    // for (int i = 0; i < n; i++) std::cout << queenColIdx[i] << " ";
-    // std::cout << "\n";
-
     start = std::chrono::steady_clock::now();
 
     bool ok = minimizeConflicts(queenColIdx, n, 
@@ -344,7 +244,7 @@ int main(int argc, char ** argv)
     std::cout << "Result: " << ok << "\n";
     std::cout << "Check: " << isSolution(queenColIdx, n) << "\n";
 
-    // printBoard(std::cout, queenColIdx, n);
+    printBoard(std::cout, queenColIdx, n);
 
     return 0;
 }
