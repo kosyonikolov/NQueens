@@ -79,7 +79,7 @@ static inline int conflicts(const int x, const int y, const int n,
 void fillHistograms(const int * colIdx, const int n,
                     int * colHist, int * d0Hist, int * d1Hist)
 {
-    const int diagonalHistSize = 2 * n - 1;
+    const int diagonalHistSize = 2 * n + 1;
     std::fill_n(colHist, n, 0);
     std::fill_n(d0Hist - n, diagonalHistSize, 0);
     std::fill_n(d1Hist - n, diagonalHistSize, 0);
@@ -100,7 +100,7 @@ void initBoard(int * outColIdx, const int n,
                _URNG & rng)
 {
     // prepare histograms
-    const int diagonalHistSize = 2 * n - 1;
+    const int diagonalHistSize = 2 * n + 1;
     std::fill_n(colHist, n, 0);
     std::fill_n(d0Hist - n, diagonalHistSize, 0);
     std::fill_n(d1Hist - n, diagonalHistSize, 0);
@@ -229,7 +229,7 @@ void hardcodedTest()
     int * d1Hist = ptrD1Histogram.get() + n + 1;
 
     // fill histograms
-    const int diagonalHistSize = 2 * n - 1;
+    const int diagonalHistSize = 2 * n + 1;
     std::fill_n(colHist, n, 0);
     std::fill_n(d0Hist - n, diagonalHistSize, 0);
     std::fill_n(d1Hist - n, diagonalHistSize, 0);
