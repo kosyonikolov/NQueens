@@ -9,6 +9,8 @@
 #include "MinList.h"
 #include "printBoard.h"
 
+#define PRINT_STATS (0)
+
 bool isSolution(const int * queenColIdx, const int n)
 {
     for (int y = 1; y < n; y++)
@@ -78,6 +80,10 @@ void initBoard(int * outColIdx, const int n,
                MinList<int, int> & conflictList,
                _URNG & rng)
 {
+#if PRINT_STATS
+    auto start = std::chrono::steady_clock::now();
+#endif
+
     // prepare histograms
     const int diagonalHistSize = 2 * n + 1;
     std::fill_n(colHist, n, 0);
@@ -104,6 +110,12 @@ void initBoard(int * outColIdx, const int n,
         d0Hist[d0Idx(x, y)]++;
         d1Hist[d1Idx(x, y, n)]++;
     }
+
+#if PRINT_STATS
+    auto end = std::chrono::steady_clock::now();
+    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "[InitBoard] " << elapsedUs << " us\n";
+#endif
 }
 
 template<typename _URNG>
@@ -112,6 +124,10 @@ bool minimizeConflicts(int * outColIdx, const int n,
                        MinList<int, int> & conflictList,
                        const int maxIters, _URNG & rng)
 {
+#if PRINT_STATS
+    auto start = std::chrono::steady_clock::now();
+#endif
+
     int i = 0;
     bool ok = false;
     for (; i < maxIters; i++)
@@ -171,8 +187,12 @@ bool minimizeConflicts(int * outColIdx, const int n,
         d1Hist[d1Idx(newX,   worstY, n)]++;
     }
 
-    std::cout << "Min conflict iters: " << i << "\n";
-
+#if PRINT_STATS
+    auto end = std::chrono::steady_clock::now();
+    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "[MinConflicts] " << i << " iters / " << elapsedUs << " us\n";
+#endif
+    
     return ok;
 }
 
@@ -220,7 +240,9 @@ bool solve(int * outColIdx, const int n,
               minMaxList, rng);
     }
 
+#if PRINT_STATS
     std::cout << "Starts: " << iStart << "\n";
+#endif
 
     return ok;
 }
@@ -247,7 +269,7 @@ int main(int argc, char ** argv)
     uint64_t solTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "Solution time: " << solTimeMs << " ms\n";
 
-    if (ok && n < 42)
+    if (ok && n <= 42)
     {
         printBoard(std::cout, queenColIdx, n);
     }
