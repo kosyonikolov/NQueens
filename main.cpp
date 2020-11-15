@@ -300,7 +300,7 @@ bool solve(int * outColIdx, const int n,
     int * d1Hist = ptrD1Histogram.get() + n;
 
     // list msed to choose min/max indices at random
-    MinList<int, int> minMaxList(n);
+    MinList<int, int> minMaxList(n + 4);
 
     std::random_device rng;
     const int maxMinConflictIters = std::round(n * maxIterationsRatio);
@@ -326,7 +326,7 @@ bool solve(int * outColIdx, const int n,
         const float alpha = (std::sqrt(n) - std::sqrt(THR_LOW)) / (std::sqrt(THR_HIGH) - std::sqrt(THR_LOW));
         return alpha * VAL_LOW + (1.0f - alpha) * VAL_HIGH;
     }();
-    const int randomAttempts = std::max(10, static_cast<int>(std::round(attemptMult * std::log2(n))));
+    const int randomAttempts = std::min(n, std::max(10, static_cast<int>(std::round(attemptMult * std::log2(n)))));
 
     horsesForCourses(outColIdx, n,
                      colHist, d0Hist, d1Hist,
@@ -382,9 +382,21 @@ int main(int argc, char ** argv)
     std::unique_ptr<int[]> ptrQueenColIdx(new int[n]);
     int * queenColIdx = ptrQueenColIdx.get();
     
+    // special cases
+    if (n == 1)
+    {
+        std::cout << "X\n";
+        return 0;
+    }
+    else if (n == 2 || n == 3)
+    {
+        std::cout << "No solution\n";
+        return 0;
+    }
+
     auto start = std::chrono::steady_clock::now();
 
-    bool ok = solve(queenColIdx, n, 10, 1.0f);
+    bool ok = solve(queenColIdx, n, 100, 2.0f);
 
     auto end = std::chrono::steady_clock::now();
     uint64_t solTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
