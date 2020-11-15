@@ -9,7 +9,8 @@
 #include "MinList.h"
 #include "printBoard.h"
 
-#define PRINT_STATS (0)
+#define PRINT_STATS (1)
+#define USE_HORSE_INIT (1)
 
 bool isSolution(const int * queenColIdx, const int n)
 {
@@ -57,21 +58,12 @@ static inline int conflicts(const int x, const int y, const int n,
     //return colHist[x] + d0Hist[d0Idx(x, y)] + d1Hist[d1Idx(x, y, n)];
 }
 
-void fillHistograms(const int * colIdx, const int n,
-                    int * colHist, int * d0Hist, int * d1Hist)
+void clearHistograms(int * colHist, int * d0Hist, int * d1Hist, const int n)
 {
     const int diagonalHistSize = 2 * n + 1;
     std::fill_n(colHist, n, 0);
     std::fill_n(d0Hist - n, diagonalHistSize, 0);
     std::fill_n(d1Hist - n, diagonalHistSize, 0);
-
-    for (int y = 0; y < n; y++)
-    {
-        const int x = colIdx[y];
-        colHist[x]++;
-        d0Hist[d0Idx(x, y)]++;
-        d1Hist[d1Idx(x, y, n)]++;
-    }
 }
 
 template<typename _URNG>
@@ -85,10 +77,7 @@ void initBoard(int * outColIdx, const int n,
 #endif
 
     // prepare histograms
-    const int diagonalHistSize = 2 * n + 1;
-    std::fill_n(colHist, n, 0);
-    std::fill_n(d0Hist - n, diagonalHistSize, 0);
-    std::fill_n(d1Hist - n, diagonalHistSize, 0);
+    clearHistograms(colHist, d0Hist, d1Hist, n);
 
     for (int y = 0; y < n; y++)
     {
@@ -113,8 +102,104 @@ void initBoard(int * outColIdx, const int n,
 
 #if PRINT_STATS
     auto end = std::chrono::steady_clock::now();
-    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "[InitBoard] " << elapsedUs << " us\n";
+    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "[InitBoard] " << elapsedUs << " ms\n";
+#endif
+}
+
+template<typename _URNG>
+void horsesForCourses(int * outColIdx, const int n, 
+                      int * colHist, int * d0Hist, int * d1Hist,
+                      const float pRandom, const int randomAttemps,
+                      MinList<int, int> & conflictList,
+                      _URNG & rng)
+{
+#if PRINT_STATS
+    auto start = std::chrono::steady_clock::now();
+#endif
+
+    clearHistograms(colHist, d0Hist, d1Hist, n);
+
+    std::uniform_int_distribution<int> xDist(0, n - 1);
+    std::uniform_real_distribution<float> pDist(0, 1);
+
+    auto placeQueen = [&](const int x, const int y)
+    {
+        outColIdx[y] = x;
+        colHist[x]++;
+        d0Hist[d0Idx(x, y)]++;
+        d1Hist[d1Idx(x, y, n)]++;
+    };
+
+    int y = 0;
+    // place first queen
+    {
+        const int x = xDist(rng);
+        placeQueen(x, y);
+        y++;
+    }
+
+    // place second queen
+    {
+        conflictList.Reset();
+        
+        for (int i = 0; i < randomAttemps; i++)
+        {
+            const int x = xDist(rng);
+            conflictList.Update(conflicts(x, y, n, colHist, d0Hist, d1Hist), x);
+        }
+
+        const int xPrev = outColIdx[y - 1];
+        if (xPrev >= 2) conflictList.Update(conflicts(xPrev - 2, y, n, colHist, d0Hist, d1Hist), xPrev - 2);
+        else conflictList.Update(conflicts(n + xPrev - 2, y, n, colHist, d0Hist, d1Hist), n + xPrev - 2);
+        if (xPrev < n - 2) conflictList.Update(conflicts(xPrev + 2, y, n, colHist, d0Hist, d1Hist), xPrev + 2);
+        else conflictList.Update(conflicts(xPrev + 2 - n, y, n, colHist, d0Hist, d1Hist), xPrev + 2 - n);
+
+        const int x = conflictList.SelectRandomValue(rng);
+        placeQueen(x, y);
+        y++;
+    }
+
+    for (; y < n; y++)
+    {
+        conflictList.Reset();
+
+        // positions from queen two lines above
+        {
+            const int xPrev = outColIdx[y - 2];
+            if (xPrev >= 1) conflictList.Update(conflicts(xPrev - 1, y, n, colHist, d0Hist, d1Hist), xPrev - 1);
+            else conflictList.Update(conflicts(n + xPrev - 1, y, n, colHist, d0Hist, d1Hist), n + xPrev - 1);
+            if (xPrev < n - 1) conflictList.Update(conflicts(xPrev + 1, y, n, colHist, d0Hist, d1Hist), xPrev + 1);
+            else conflictList.Update(conflicts(xPrev + 1 - n, y, n, colHist, d0Hist, d1Hist), xPrev + 1 - n);
+        }
+
+        // positions from queen one line above
+        {
+            const int xPrev = outColIdx[y - 1];
+            if (xPrev >= 2) conflictList.Update(conflicts(xPrev - 2, y, n, colHist, d0Hist, d1Hist), xPrev - 2);
+            else conflictList.Update(conflicts(n + xPrev - 2, y, n, colHist, d0Hist, d1Hist), n + xPrev - 2);
+            if (xPrev < n - 2) conflictList.Update(conflicts(xPrev + 2, y, n, colHist, d0Hist, d1Hist), xPrev + 2);
+            else conflictList.Update(conflicts(xPrev + 2 - n, y, n, colHist, d0Hist, d1Hist), xPrev + 2 - n);
+        }
+
+        // random positions
+        if (pDist(rng) <= pRandom)
+        {
+            for (int i = 0; i < randomAttemps; i++)
+            {
+                const int x = xDist(rng);
+                conflictList.Update(conflicts(x, y, n, colHist, d0Hist, d1Hist), x);
+            }
+        }
+
+        const int x = conflictList.SelectRandomValue(rng);
+        placeQueen(x, y);
+    }
+
+#if PRINT_STATS
+    auto end = std::chrono::steady_clock::now();
+    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "[HorsesForCourses] " << elapsedUs << " ms\n";
 #endif
 }
 
@@ -189,8 +274,8 @@ bool minimizeConflicts(int * outColIdx, const int n,
 
 #if PRINT_STATS
     auto end = std::chrono::steady_clock::now();
-    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout << "[MinConflicts] " << i << " iters / " << elapsedUs << " us\n";
+    const uint64_t elapsedUs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "[MinConflicts] " << i << " iters / " << elapsedUs << " ms\n";
 #endif
     
     return ok;
@@ -210,19 +295,30 @@ bool solve(int * outColIdx, const int n,
     int * colHist = ptrColHistogram.get();
 
     // make diagonal pointers start at the center of the histogram
-    // this allows us to take advantage of negative indices
-    int * d0Hist = ptrD0Histogram.get() + n + 1;
-    int * d1Hist = ptrD1Histogram.get() + n + 1;
+    // this allows ms to take advantage of negative indices
+    int * d0Hist = ptrD0Histogram.get() + n;
+    int * d1Hist = ptrD1Histogram.get() + n;
 
-    // list used to choose min/max indices at random
+    // list msed to choose min/max indices at random
     MinList<int, int> minMaxList(n);
 
     std::random_device rng;
     const int maxMinConflictIters = std::round(n * maxIterationsRatio);
 
+#if USE_HORSE_INIT
+    const float pRandom = 1.0f;
+    const float attemptMult = 2.0f;
+    const int randomAttempts = std::max(10, static_cast<int>(std::round(attemptMult * std::log2(n))));
+
+    horsesForCourses(outColIdx, n,
+                     colHist, d0Hist, d1Hist,
+                     pRandom, randomAttempts,
+                     minMaxList, rng);
+#else   
     initBoard(outColIdx, n, 
               colHist, d0Hist, d1Hist,
               minMaxList, rng);
+#endif
 
     int iStart = 1;
     bool ok = false;
@@ -235,9 +331,16 @@ bool solve(int * outColIdx, const int n,
 
         if (ok) break;
 
+#if USE_HORSE_INIT
+        horsesForCourses(outColIdx, n,
+                        colHist, d0Hist, d1Hist,
+                        pRandom, randomAttempts,
+                        minMaxList, rng);
+#else   
         initBoard(outColIdx, n, 
-              colHist, d0Hist, d1Hist,
-              minMaxList, rng);
+                colHist, d0Hist, d1Hist,
+                minMaxList, rng);
+#endif
     }
 
 #if PRINT_STATS
@@ -263,7 +366,7 @@ int main(int argc, char ** argv)
     
     auto start = std::chrono::steady_clock::now();
 
-    bool ok = solve(queenColIdx, n, 10, 5.0f);
+    bool ok = solve(queenColIdx, n, 10, 1.0f);
 
     auto end = std::chrono::steady_clock::now();
     uint64_t solTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
