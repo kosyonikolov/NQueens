@@ -9,6 +9,11 @@
 #include "MinList.h"
 #include "printBoard.h"
 
+#ifdef DRAW_SOLUTION_BOARD
+#include <opencv2/opencv.hpp>
+#include "drawBoard.h"
+#endif
+
 // Read from standard input instead of command-line argument
 #define READ_FROM_STDIN (1)
 
@@ -453,6 +458,10 @@ int main(int argc, char ** argv)
     if (ok && n <= 42)
     {
         printBoard(std::cout, queenColIdx, n);
+#ifdef DRAW_SOLUTION_BOARD
+        cv::Mat boardImg = drawBoard(queenColIdx, n);
+        cv::imwrite("solution.jpg", boardImg);
+#endif
     }
 
 #if SANITY_CHECK
