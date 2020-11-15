@@ -15,7 +15,7 @@
 // Print stats that show how many times the initialization happened
 // and how many iterations min conflicts performed each time
 // Also print the runtime of each stage
-#define PRINT_STATS (1)
+#define PRINT_STATS (0)
 
 // Initialize the board using horse patterns + log n random positions
 // instead of the classical random init with min conflicts
@@ -337,16 +337,17 @@ bool solve(int * outColIdx, const int n,
 
 #if USE_HORSE_INIT
     const float pRandom = 1.0f;
-    //const float attemptMult = 0.7f;
+    // Sample this many * log2(N) random positions as well as the horse positions
     const float attemptMult = [&]()
     {
-        // Experimentation has shown that for n=10k 0.7 works best
-        // and for n=100k 3.0 works best. The solution is to interpolate
-        // between those two values
+        // Experimentation has shown that for n = 10k and n = 100k
+        // these values work best. Values for other n will be interpolated
+        // A formula for the optimal value can probably be derived by
+        // math and/or empirical observations, but this is good enough for the homework
         const int THR_LOW = 10000;
         const int THR_HIGH = 100000;
-        const float VAL_LOW = 0.7f;
-        const float VAL_HIGH = 3.0f;
+        const float VAL_LOW = 5.0f;
+        const float VAL_HIGH = 20.0f;
 
         if (n <= THR_LOW) return VAL_LOW;
         if (n >= THR_HIGH) return VAL_HIGH;
